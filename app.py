@@ -90,10 +90,13 @@ with tab_diario:
         fecha_registro = st.date_input("Fecha de Registro", datetime.date.today())
         tipo_alimento = st.selectbox("Dieta Utilizada", ["0.8 mm - 40% (55 lbs)", "1.2 mm - 35% (55 lbs)", "1.8 mm - 30% (100 lbs)"])
         
-        st.write("**Calidad de Agua**")
+        st.write("**Calidad de Agua (Mañana y Tarde)**")
         do_am = st.number_input("OD AM (mg/L)", value=None, step=0.1, placeholder="Ej. 4.0")
         temp_am = st.number_input("Temp AM (°C)", value=None, step=0.1, placeholder="Ej. 28.5")
+        do_pm = st.number_input("OD PM (mg/L)", value=None, step=0.1, placeholder="Ej. 6.5")
+        temp_pm = st.number_input("Temp PM (°C)", value=None, step=0.1, placeholder="Ej. 31.0")
         secchi = st.number_input("Secchi (cm)", value=None, step=1, placeholder="Ej. 35")
+        salinidad = st.number_input("Salinidad (ppt)", value=None, step=0.5, placeholder="Ej. 28.0")
         
     with col_in2:
         st.write("**1. Muestreo Poblacional (Atarraya)**")
@@ -136,7 +139,10 @@ with tab_diario:
 
     c_do = do_am if do_am is not None else 0.0
     c_temp = temp_am if temp_am is not None else 0.0
+    c_do_pm = do_pm if do_pm is not None else 0.0
+    c_temp_pm = temp_pm if temp_pm is not None else 0.0
     c_secchi = secchi if secchi is not None else 0
+    c_sal = salinidad if salinidad is not None else 0.0
     c_lances = lances if lances is not None else 0
     c_cam_red = camarones_red if camarones_red is not None else 0
     c_peso_input = peso_promedio if peso_promedio is not None else 0.0
@@ -231,13 +237,14 @@ with tab_diario:
 
     if st.button("Guardar Reporte Diario", use_container_width=True):
         columnas_operacion = [
-            "Fecha", "DOC", "Laguna", "OD_AM", "Temp_C", "Secchi_cm", "Dieta", 
+            "Fecha", "DOC", "Laguna", "OD_AM", "Temp_C", "OD_PM", "Temp_PM", "Secchi_cm", "Salinidad_ppt", "Dieta", 
             "Densidad", "Peso_g", "Supervivencia_%", "Biomasa_lbs", "Indice_Apetito", 
             "Racion_lbs", "Sacos_Usados", "Gramos_Bacillus", "Libras_Semolina", "Costo_Lempiras"
         ]
         nuevo_dato = pd.DataFrame([{
             "Fecha": str(fecha_registro), "DOC": max(0, doc_dias), "Laguna": laguna_registro,
-            "OD_AM": c_do, "Temp_C": c_temp, "Secchi_cm": c_secchi, "Dieta": tipo_alimento,
+            "OD_AM": c_do, "Temp_C": c_temp, "OD_PM": c_do_pm, "Temp_PM": c_temp_pm, 
+            "Secchi_cm": c_secchi, "Salinidad_ppt": c_sal, "Dieta": tipo_alimento,
             "Densidad": round(densidad_real, 2), "Peso_g": peso_final_calculado, "Supervivencia_%": round(supervivencia_dinamica, 1),
             "Biomasa_lbs": round(biomasa_lbs, 2), "Indice_Apetito": round(indice_apetito, 2),
             "Racion_lbs": round(racion_final_lbs, 2), "Sacos_Usados": round(sacos_necesarios, 2),
@@ -273,8 +280,8 @@ with tab_dash:
             
             col_graf1, col_graf2 = st.columns(2)
             with col_graf1:
-                fig_agua = px.line(df_filtro, x="DOC", y=["OD_AM", "Indice_Apetito"], markers=True,
-                                   title="Relación: Oxígeno Matutino vs Apetito (1=Bueno, 3=Malo)")
+                fig_agua = px.line(df_filtro, x="DOC", y=["OD_AM", "OD_PM", "Indice_Apetito"], markers=True,
+                                   title="Relación: Oxígeno (AM/PM) vs Apetito")
                 st.plotly_chart(fig_agua, use_container_width=True)
                 
             with col_graf2:
