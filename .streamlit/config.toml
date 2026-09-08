@@ -1,0 +1,15 @@
+[theme]
+# Sunglow para botones principales y elementos de acción
+primaryColor = "#FEC82B"
+
+# Fondo general blanco para maximizar el contraste
+backgroundColor = "#FFFFFF"
+
+# Tono suave inspirado en el Baby Blue para menús laterales y cajas
+secondaryBackgroundColor = "#F4F9FC"
+
+# Prussian Blue para todo el texto, garantizando legibilidad y sobriedad
+textColor = "#023047"
+
+# Sans serif para emular la familia tipográfica Lato
+font = "sans serif"
