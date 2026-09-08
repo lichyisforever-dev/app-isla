@@ -128,10 +128,11 @@ with tab_diario:
                 st.warning("Faltan días para siembra")
             
     with col_in3:
-        st.write("**Lectura de Charolas**")
+        st.write("**Lectura de Charolas y Alimento**")
         charolas_1 = st.number_input("Cant. en '1' (Todo)", value=None, step=1, placeholder="Ej. 0")
         charolas_2 = st.number_input("Cant. en '2' (Poco)", value=None, step=1, placeholder="Ej. 2")
         charolas_3 = st.number_input("Cant. en '3' (Nada)", value=None, step=1, placeholder="Ej. 10")
+        alimento_real_suministrado = st.number_input("Alimento Real Suministrado Hoy (lbs)", value=None, step=5.0, placeholder="Ej. 220.0")
         
         st.write("**Movimientos Extraordinarios**")
         transferidos_hoy = st.number_input("Juveniles Transferidos / Raleo (Salida)", value=None, step=1000, placeholder="Ej. 0")
@@ -160,8 +161,8 @@ with tab_diario:
     area_total_m2 = area_ha_db * 10000
     
     densidad_real = 0.0
-    ultima_densidad = 0.0
-    ultimo_peso = 0.0
+    ultima_densidad = (pls_sembradas_db / area_total_m2) if area_total_m2 > 0 else 0.0
+    ultimo_peso = 0.1 
 
     try:
         df_hist = conn.read(worksheet="Operacion_Diaria", ttl=0)
@@ -172,23 +173,12 @@ with tab_diario:
             df_densidad_valida = df_lag[df_lag["Densidad"] > 0]
             if not df_densidad_valida.empty:
                 ultima_densidad = float(df_densidad_valida.iloc[-1]["Densidad"])
-            else:
-                if area_total_m2 > 0:
-                    ultima_densidad = pls_sembradas_db / area_total_m2
                     
             df_peso_valido = df_lag[df_lag["Peso_g"] > 0]
             if not df_peso_valido.empty:
                 ultimo_peso = float(df_peso_valido.iloc[-1]["Peso_g"])
-            else:
-                ultimo_peso = 0.1
-        else:
-            if area_total_m2 > 0:
-                ultima_densidad = pls_sembradas_db / area_total_m2
-            ultimo_peso = 0.1
     except:
-        if area_total_m2 > 0:
-            ultima_densidad = pls_sembradas_db / area_total_m2
-        ultimo_peso = 0.1
+        pass
 
     if hizo_poblacional and c_lances > 0 and c_cam_red > 0:
         area_muestreada = c_lances * AREA_ATARRAYA_M2
@@ -215,7 +205,8 @@ with tab_diario:
     else:
         ajuste = 1.0
 
-    racion_final_lbs = tope_alimento_lbs * ajuste
+    racion_sugerida_lbs = tope_alimento_lbs * ajuste
+    racion_final_lbs = alimento_real_suministrado if alimento_real_suministrado is not None else racion_sugerida_lbs
 
     if "0.8 mm" in tipo_alimento:
         peso_saco_lbs, costo_saco_activo = 55, p_08_db
@@ -249,7 +240,7 @@ with tab_diario:
     col_r1, col_r2, col_r3, col_r4 = st.columns(4)
     col_r1.metric("Biomasa Estimada", f"{biomasa_lbs:,.0f} lbs", f"Supervivencia: {supervivencia_dinamica:.1f}%")
     col_r2.metric("Factor de Conversión (FCA)", f"{fca_actual:.2f}")
-    col_r3.metric("Ración Autorizada", f"{racion_final_lbs:,.1f} lbs", f"Crecimiento 7d: +{crecimiento_sem:.2f}g")
+    col_r3.metric("Ración Asignada", f"{racion_final_lbs:,.1f} lbs", f"Sugerida: {racion_sugerida_lbs:,.1f} lbs")
     col_r4.metric("Costo Total Diario", f"L {costo_diario_total:,.2f}", f"Alimento: L {costo_alimento:,.0f} | Insumos: L {costo_insumos:,.0f}")
 
     if st.button("Guardar Reporte Diario", use_container_width=True):
@@ -293,20 +284,23 @@ with tab_dash:
             laguna_dash = st.selectbox("Seleccionar Laguna para Análisis", df_hist["Laguna"].unique())
             df_filtro = df_hist[df_hist["Laguna"] == laguna_dash].sort_values(by="DOC")
             
+            # Gráfico de crecimiento enriquecido con líneas y marcadores limpios
             fig_crecimiento = px.line(df_filtro, x="DOC", y="Peso_g", markers=True, 
-                                      title="Curva de Crecimiento (Pesos Registrados)")
+                                      title="Evolución de Peso Promedio (Biometría)")
+            fig_crecimiento.update_traces(line=dict(color="#1f77b4", width=3), marker=dict(size=8))
+            fig_crecimiento.update_layout(xaxis_title="DOC (Días de Cultivo)", yaxis_title="Peso Promedio (g)")
             st.plotly_chart(fig_crecimiento, use_container_width=True)
             
             col_graf1, col_graf2 = st.columns(2)
             with col_graf1:
                 fig_agua = go.Figure()
-                fig_agua.add_trace(go.Scatter(x=df_filtro["DOC"], y=df_filtro["OD_AM"], name="OD AM (mg/L)", mode="lines+markers"))
-                fig_agua.add_trace(go.Scatter(x=df_filtro["DOC"], y=df_filtro["OD_PM"], name="OD PM (mg/L)", mode="lines+markers"))
-                fig_agua.add_trace(go.Scatter(x=df_filtro["DOC"], y=df_filtro["Indice_Apetito"], name="Índice Apetito", mode="lines+markers", yaxis="y2"))
+                fig_agua.add_trace(go.Scatter(x=df_filtro["DOC"], y=df_filtro["OD_AM"], name="OD AM (mg/L)", mode="lines+markers", line=dict(width=2)))
+                fig_agua.add_trace(go.Scatter(x=df_filtro["DOC"], y=df_filtro["OD_PM"], name="OD PM (mg/L)", mode="lines+markers", line=dict(width=2)))
+                fig_agua.add_trace(go.Scatter(x=df_filtro["DOC"], y=df_filtro["Indice_Apetito"], name="Índice Apetito", mode="lines+markers", line=dict(width=2, dash="dash"), yaxis="y2"))
                 
                 fig_agua.update_layout(
-                    title="Relación: Oxígeno (AM/PM) vs Índice de Apetito",
-                    xaxis=dict(title="DOC"),
+                    title="Control de Oxígeno Dissuelto vs Índice de Apetito",
+                    xaxis=dict(title="DOC (Días)"),
                     yaxis=dict(title="Oxígeno (mg/L)"),
                     yaxis2=dict(title="Índice de Apetito", overlaying="y", side="right", range=[0, 3.5]),
                     legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
@@ -315,7 +309,8 @@ with tab_dash:
                 
             with col_graf2:
                 fig_costo = px.bar(df_filtro, x="DOC", y="Costo_Lempiras", 
-                                   title="Gasto Diario Total (Alimento + Insumos en Lempiras)", color="Dieta")
+                                   title="Inversión Diaria (Alimento + Insumos en Lempiras)", color="Dieta")
+                fig_costo.update_layout(xaxis_title="DOC (Días)", yaxis_title="Costo Total (Lempiras)")
                 st.plotly_chart(fig_costo, use_container_width=True)
             
             csv = df_filtro.to_csv(index=False).encode('utf-8')
