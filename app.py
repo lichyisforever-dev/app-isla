@@ -46,6 +46,7 @@ with tab_config:
             
             try:
                 config_actual = conn.read(worksheet="Configuracion")
+                config_actual.columns = config_actual.columns.str.strip()
                 config_actual = config_actual[config_actual["Laguna"] != nombre_laguna]
                 config_actualizada = pd.concat([config_actual, nueva_config], ignore_index=True)
             except:
@@ -70,6 +71,7 @@ with tab_diario:
     
     try:
         df_conf = conn.read(worksheet="Configuracion")
+        df_conf.columns = df_conf.columns.str.strip()
         df_conf_lag = df_conf[df_conf["Laguna"] == laguna_registro]
         if not df_conf_lag.empty:
             conf = df_conf_lag.iloc[-1]
@@ -158,21 +160,35 @@ with tab_diario:
     area_total_m2 = area_ha_db * 10000
     
     densidad_real = 0.0
+    ultima_densidad = 0.0
+    ultimo_peso = 0.0
 
     try:
         df_hist = conn.read(worksheet="Operacion_Diaria")
+        df_hist.columns = df_hist.columns.str.strip()
         df_lag = df_hist[df_hist["Laguna"] == laguna_registro]
         
         if not df_lag.empty:
             df_densidad_valida = df_lag[df_lag["Densidad"] > 0]
-            ultima_densidad = df_densidad_valida.iloc[-1]["Densidad"] if not df_densidad_valida.empty else 0.0
-            ultimo_peso = df_lag.iloc[-1]["Peso_g"] if not df_lag.empty else 0.0
+            if not df_densidad_valida.empty:
+                ultima_densidad = float(df_densidad_valida.iloc[-1]["Densidad"])
+            else:
+                if area_total_m2 > 0:
+                    ultima_densidad = pls_sembradas_db / area_total_m2
+                    
+            df_peso_valido = df_lag[df_lag["Peso_g"] > 0]
+            if not df_peso_valido.empty:
+                ultimo_peso = float(df_peso_valido.iloc[-1]["Peso_g"])
+            else:
+                ultimo_peso = 0.1
         else:
-            ultima_densidad = 0.0
-            ultimo_peso = 0.0
+            if area_total_m2 > 0:
+                ultima_densidad = pls_sembradas_db / area_total_m2
+            ultimo_peso = 0.1
     except:
-        ultima_densidad = 0.0
-        ultimo_peso = 0.0
+        if area_total_m2 > 0:
+            ultima_densidad = pls_sembradas_db / area_total_m2
+        ultimo_peso = 0.1
 
     if hizo_poblacional and c_lances > 0 and c_cam_red > 0:
         area_muestreada = c_lances * AREA_ATARRAYA_M2
@@ -238,24 +254,24 @@ with tab_diario:
 
     if st.button("Guardar Reporte Diario", use_container_width=True):
         columnas_operacion = [
-            "Fecha", "DOC", "Laguna", "OD_AM", "Temp_C", "Secchi_cm", "Dieta", 
+            "Fecha", "DOC", "Laguna", "OD_AM", "Temp_C", "OD_PM", "Temp_PM", "Secchi_cm", "Salinidad_ppt", "Dieta", 
             "Densidad", "Peso_g", "Supervivencia_%", "Biomasa_lbs", "Indice_Apetito", 
-            "Racion_lbs", "Sacos_Usados", "Gramos_Bacillus", "Libras_Semolina", "Costo_Lempiras",
-            "OD_PM", "Temp_PM", "Salinidad_ppt"
+            "Racion_lbs", "Sacos_Usados", "Gramos_Bacillus", "Libras_Semolina", "Costo_Lempiras"
         ]
         nuevo_dato = pd.DataFrame([{
             "Fecha": str(fecha_registro), "DOC": max(0, doc_dias), "Laguna": laguna_registro,
-            "OD_AM": c_do, "Temp_C": c_temp, "Secchi_cm": c_secchi, "Dieta": tipo_alimento,
-            "Densidad": round(densidad_real, 2), "Peso_g": peso_final_calculado, "Supervivencia_%": round(supervivencia_dinamica, 1),
+            "OD_AM": c_do, "Temp_C": c_temp, "OD_PM": c_do_pm, "Temp_PM": c_temp_pm, 
+            "Secchi_cm": c_secchi, "Salinidad_ppt": c_sal, "Dieta": tipo_alimento,
+            "Densidad": round(densidad_real, 4), "Peso_g": peso_final_calculado, "Supervivencia_%": round(supervivencia_dinamica, 1),
             "Biomasa_lbs": round(biomasa_lbs, 2), "Indice_Apetito": round(indice_apetito, 2),
             "Racion_lbs": round(racion_final_lbs, 2), "Sacos_Usados": round(sacos_necesarios, 2),
             "Gramos_Bacillus": c_bac, "Libras_Semolina": c_sem,
-            "Costo_Lempiras": round(costo_diario_total, 2),
-            "OD_PM": c_do_pm, "Temp_PM": c_temp_pm, "Salinidad_ppt": c_sal
+            "Costo_Lempiras": round(costo_diario_total, 2)
         }])[columnas_operacion]
         
         try:
             datos_actuales = conn.read(worksheet="Operacion_Diaria")
+            datos_actuales.columns = datos_actuales.columns.str.strip()
             datos_actualizados = pd.concat([datos_actuales, nuevo_dato], ignore_index=True)
         except:
             datos_actualizados = nuevo_dato
@@ -271,6 +287,7 @@ with tab_dash:
     
     try:
         df_hist = conn.read(worksheet="Operacion_Diaria")
+        df_hist.columns = df_hist.columns.str.strip()
         
         if not df_hist.empty and "Laguna" in df_hist.columns:
             laguna_dash = st.selectbox("Seleccionar Laguna para Análisis", df_hist["Laguna"].unique())
@@ -282,7 +299,6 @@ with tab_dash:
             
             col_graf1, col_graf2 = st.columns(2)
             with col_graf1:
-                # Gráfico con doble eje Y para evitar problemas de escala entre Oxígeno e Índice de Apetito
                 fig_agua = go.Figure()
                 fig_agua.add_trace(go.Scatter(x=df_filtro["DOC"], y=df_filtro["OD_AM"], name="OD AM (mg/L)", mode="lines+markers"))
                 fig_agua.add_trace(go.Scatter(x=df_filtro["DOC"], y=df_filtro["OD_PM"], name="OD PM (mg/L)", mode="lines+markers"))
