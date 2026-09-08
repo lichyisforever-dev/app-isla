@@ -45,7 +45,7 @@ with tab_config:
             }])[columnas_config]
             
             try:
-                config_actual = conn.read(worksheet="Configuracion")
+                config_actual = conn.read(worksheet="Configuracion", ttl=0)
                 config_actual.columns = config_actual.columns.str.strip()
                 config_actual = config_actual[config_actual["Laguna"] != nombre_laguna]
                 config_actualizada = pd.concat([config_actual, nueva_config], ignore_index=True)
@@ -70,7 +70,7 @@ with tab_diario:
     fecha_siembra_db = None
     
     try:
-        df_conf = conn.read(worksheet="Configuracion")
+        df_conf = conn.read(worksheet="Configuracion", ttl=0)
         df_conf.columns = df_conf.columns.str.strip()
         df_conf_lag = df_conf[df_conf["Laguna"] == laguna_registro]
         if not df_conf_lag.empty:
@@ -164,7 +164,7 @@ with tab_diario:
     ultimo_peso = 0.0
 
     try:
-        df_hist = conn.read(worksheet="Operacion_Diaria")
+        df_hist = conn.read(worksheet="Operacion_Diaria", ttl=0)
         df_hist.columns = df_hist.columns.str.strip()
         df_lag = df_hist[df_hist["Laguna"] == laguna_registro]
         
@@ -270,7 +270,7 @@ with tab_diario:
         }])[columnas_operacion]
         
         try:
-            datos_actuales = conn.read(worksheet="Operacion_Diaria")
+            datos_actuales = conn.read(worksheet="Operacion_Diaria", ttl=0)
             datos_actuales.columns = datos_actuales.columns.str.strip()
             datos_actualizados = pd.concat([datos_actuales, nuevo_dato], ignore_index=True)
         except:
@@ -286,7 +286,7 @@ with tab_dash:
     st.subheader("Análisis de Tendencias")
     
     try:
-        df_hist = conn.read(worksheet="Operacion_Diaria")
+        df_hist = conn.read(worksheet="Operacion_Diaria", ttl=0)
         df_hist.columns = df_hist.columns.str.strip()
         
         if not df_hist.empty and "Laguna" in df_hist.columns:
