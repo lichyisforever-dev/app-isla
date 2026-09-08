@@ -271,10 +271,10 @@ with tab_diario:
         st.success(f"Reporte de {laguna_registro} guardado exitosamente.")
 
 # -----------------------------------------
-# PESTAÑA 3: DASHBOARD ANALÍTICO
+# PESTAÑA 3: DASHBOARD ANALÍTICO DE ALTO RENDIMIENTO
 # -----------------------------------------
 with tab_dash:
-    st.subheader("Análisis de Tendencias")
+    st.subheader("Análisis de Tendencias Biológicas y Financieras")
     
     try:
         df_hist = conn.read(worksheet="Operacion_Diaria", ttl=0)
@@ -284,43 +284,102 @@ with tab_dash:
             laguna_dash = st.selectbox("Seleccionar Laguna para Análisis", df_hist["Laguna"].unique())
             df_filtro = df_hist[df_hist["Laguna"] == laguna_dash].sort_values(by="DOC")
             
-            # Gráfico de crecimiento enriquecido con líneas y marcadores limpios
-            fig_crecimiento = px.line(df_filtro, x="DOC", y="Peso_g", markers=True, 
-                                      title="Evolución de Peso Promedio (Biometría)")
-            fig_crecimiento.update_traces(line=dict(color="#1f77b4", width=3), marker=dict(size=8))
-            fig_crecimiento.update_layout(xaxis_title="DOC (Días de Cultivo)", yaxis_title="Peso Promedio (g)")
-            st.plotly_chart(fig_crecimiento, use_container_width=True)
+            # Cálculos dinámicos en segundo plano para el Dashboard
+            df_filtro['Alimento_Acumulado'] = df_filtro['Racion_lbs'].cumsum()
+            df_filtro['Costo_Acumulado'] = df_filtro['Costo_Lempiras'].cumsum()
+            df_filtro['FCA_Historico'] = df_filtro.apply(lambda row: row['Alimento_Acumulado'] / row['Biomasa_lbs'] if row['Biomasa_lbs'] > 0 else 0, axis=1)
+
+            st.divider()
+
+            # FILA 1: KPIs Biológicos (Biomasa, Peso, Supervivencia, FCA)
+            col_b1, col_b2 = st.columns(2)
             
-            col_graf1, col_graf2 = st.columns(2)
-            with col_graf1:
+            with col_b1:
+                # 1. Biomasa vs Peso Promedio (Bar + Line)
+                fig_bio = go.Figure()
+                fig_bio.add_trace(go.Bar(x=df_filtro["DOC"], y=df_filtro["Biomasa_lbs"], name="Biomasa Estimada (lbs)", marker_color="rgba(44, 160, 44, 0.6)", yaxis="y1"))
+                fig_bio.add_trace(go.Scatter(x=df_filtro["DOC"], y=df_filtro["Peso_g"], name="Peso Promedio (g)", mode="lines+markers", line=dict(color="#1f77b4", width=3), yaxis="y2"))
+                fig_bio.update_layout(
+                    title="Crecimiento y Acumulación de Biomasa",
+                    xaxis=dict(title="DOC (Días)"),
+                    yaxis=dict(title="Biomasa (lbs)", side="left"),
+                    yaxis2=dict(title="Peso Promedio (g)", overlaying="y", side="right", showgrid=False),
+                    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+                )
+                st.plotly_chart(fig_bio, use_container_width=True)
+
+            with col_b2:
+                # 2. Supervivencia y Evolución del FCA
+                fig_surv = go.Figure()
+                fig_surv.add_trace(go.Scatter(x=df_filtro["DOC"], y=df_filtro["Supervivencia_%"], name="Supervivencia (%)", mode="lines+markers", line=dict(color="#d62728", width=2)))
+                fig_surv.add_trace(go.Scatter(x=df_filtro["DOC"], y=df_filtro["FCA_Historico"], name="FCA Acumulado", mode="lines+markers", line=dict(color="#9467bd", width=3, dash="dot"), yaxis="y2"))
+                fig_surv.update_layout(
+                    title="Tendencia de Supervivencia y Factor de Conversión (FCA)",
+                    xaxis=dict(title="DOC (Días)"),
+                    yaxis=dict(title="Supervivencia (%)", range=[0, 105]),
+                    yaxis2=dict(title="FCA", overlaying="y", side="right", showgrid=False),
+                    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+                )
+                st.plotly_chart(fig_surv, use_container_width=True)
+
+            # FILA 2: Parámetros Fisicoquímicos y Apetito
+            col_w1, col_w2 = st.columns(2)
+            
+            with col_w1:
+                # 3. Oxígeno y Apetito (Doble eje)
                 fig_agua = go.Figure()
-                fig_agua.add_trace(go.Scatter(x=df_filtro["DOC"], y=df_filtro["OD_AM"], name="OD AM (mg/L)", mode="lines+markers", line=dict(width=2)))
-                fig_agua.add_trace(go.Scatter(x=df_filtro["DOC"], y=df_filtro["OD_PM"], name="OD PM (mg/L)", mode="lines+markers", line=dict(width=2)))
-                fig_agua.add_trace(go.Scatter(x=df_filtro["DOC"], y=df_filtro["Indice_Apetito"], name="Índice Apetito", mode="lines+markers", line=dict(width=2, dash="dash"), yaxis="y2"))
-                
+                fig_agua.add_trace(go.Scatter(x=df_filtro["DOC"], y=df_filtro["OD_AM"], name="OD AM (mg/L)", mode="lines+markers", line=dict(color="#17becf", width=2)))
+                fig_agua.add_trace(go.Scatter(x=df_filtro["DOC"], y=df_filtro["OD_PM"], name="OD PM (mg/L)", mode="lines+markers", line=dict(color="#7f7f7f", width=2)))
+                fig_agua.add_trace(go.Scatter(x=df_filtro["DOC"], y=df_filtro["Indice_Apetito"], name="Índice Apetito", mode="lines+markers", line=dict(color="#bcbd22", width=3), yaxis="y2"))
                 fig_agua.update_layout(
-                    title="Control de Oxígeno Dissuelto vs Índice de Apetito",
+                    title="Control de Oxígeno vs Índice de Apetito (Charolas)",
                     xaxis=dict(title="DOC (Días)"),
                     yaxis=dict(title="Oxígeno (mg/L)"),
-                    yaxis2=dict(title="Índice de Apetito", overlaying="y", side="right", range=[0, 3.5]),
+                    yaxis2=dict(title="Índice de Apetito", overlaying="y", side="right", range=[0, 3.5], showgrid=False),
                     legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
                 )
                 st.plotly_chart(fig_agua, use_container_width=True)
-                
-            with col_graf2:
-                fig_costo = px.bar(df_filtro, x="DOC", y="Costo_Lempiras", 
-                                   title="Inversión Diaria (Alimento + Insumos en Lempiras)", color="Dieta")
-                fig_costo.update_layout(xaxis_title="DOC (Días)", yaxis_title="Costo Total (Lempiras)")
-                st.plotly_chart(fig_costo, use_container_width=True)
+
+            with col_w2:
+                # 4. Temperatura y Salinidad (Fisicoquímicos)
+                fig_phys = go.Figure()
+                fig_phys.add_trace(go.Scatter(x=df_filtro["DOC"], y=df_filtro["Temp_C"], name="Temp AM (°C)", mode="lines+markers", line=dict(color="#ff7f0e")))
+                fig_phys.add_trace(go.Scatter(x=df_filtro["DOC"], y=df_filtro["Temp_PM"], name="Temp PM (°C)", mode="lines+markers", line=dict(color="#d62728")))
+                fig_phys.add_trace(go.Scatter(x=df_filtro["DOC"], y=df_filtro["Salinidad_ppt"], name="Salinidad (ppt)", mode="lines", fill='tozeroy', fillcolor="rgba(148, 103, 189, 0.2)", line=dict(color="#9467bd", width=1), yaxis="y2"))
+                fig_phys.update_layout(
+                    title="Perfil de Temperatura y Salinidad",
+                    xaxis=dict(title="DOC (Días)"),
+                    yaxis=dict(title="Temperatura (°C)"),
+                    yaxis2=dict(title="Salinidad (ppt)", overlaying="y", side="right", showgrid=False),
+                    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+                )
+                st.plotly_chart(fig_phys, use_container_width=True)
+
+            # FILA 3: Análisis Financiero Integral
+            st.divider()
             
+            # 5. Costo Diario vs Costo Acumulado
+            fig_fin = go.Figure()
+            fig_fin.add_trace(go.Bar(x=df_filtro["DOC"], y=df_filtro["Costo_Lempiras"], name="Inversión Diaria (L)", marker_color="#aec7e8", yaxis="y1"))
+            fig_fin.add_trace(go.Scatter(x=df_filtro["DOC"], y=df_filtro["Costo_Acumulado"], name="Inversión Acumulada (L)", mode="lines+markers", line=dict(color="#1f77b4", width=3), yaxis="y2"))
+            fig_fin.update_layout(
+                title="Análisis Financiero: Inversión Diaria vs Acumulada (Alimento + Insumos)",
+                xaxis=dict(title="DOC (Días)"),
+                yaxis=dict(title="Costo Diario (Lempiras)"),
+                yaxis2=dict(title="Costo Acumulado Total (Lempiras)", overlaying="y", side="right", showgrid=False),
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+            )
+            st.plotly_chart(fig_fin, use_container_width=True)
+
+            # Botón de exportación debajo de todo
             csv = df_filtro.to_csv(index=False).encode('utf-8')
             st.download_button(
-                label="📥 Exportar Historial a Excel/CSV",
+                label="📥 Exportar Historial Analítico a Excel/CSV",
                 data=csv,
                 file_name=f'Historial_{laguna_dash}.csv',
                 mime='text/csv',
             )
         else:
             st.info("No hay datos históricos suficientes para generar las gráficas.")
-    except:
-        st.warning("Guarda al menos un reporte para visualizar el Dashboard.")
+    except Exception as e:
+        st.warning("Guarda al menos un reporte para visualizar el Dashboard Analítico.")
